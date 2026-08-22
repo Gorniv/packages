@@ -1,3 +1,7 @@
+## 17.5.1
+
+- Fixes `ShellRoute` key collisions without recreating the navigator when routes are reparsed.
+
 ## 17.5.0
 
 - Adds route `metadata` support, including inheritance and override behavior with exposure on `GoRouterState`.

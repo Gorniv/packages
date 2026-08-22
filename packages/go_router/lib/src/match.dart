@@ -174,7 +174,7 @@ abstract class RouteMatchBase with Diagnosticable {
       // have at least one match for this ShellRouteBase.
       matches: subRouteMatches!.remove(null)!,
       matchedLocation: remainingLocation,
-      pageKey: ValueKey<String>(route.hashCode.toString()),
+      pageKey: _ShellRoutePageKey(route),
       navigatorKey: navigatorKeyUsed,
     );
     subRouteMatches.putIfAbsent(parentKey, () => <RouteMatchBase>[]).insert(0, result);
@@ -334,6 +334,20 @@ class RouteMatch extends RouteMatchBase {
       metadata: metadata,
     );
   }
+}
+
+class _ShellRoutePageKey extends ValueKey<String> {
+  _ShellRoutePageKey(ShellRouteBase route) : _route = route, super(route.hashCode.toString());
+
+  final ShellRouteBase _route;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _ShellRoutePageKey && identical(other._route, _route);
+  }
+
+  @override
+  int get hashCode => identityHashCode(_route);
 }
 
 /// An matched result by matching a [ShellRoute] against a location.
