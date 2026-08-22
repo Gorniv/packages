@@ -177,55 +177,83 @@ void main() {
   ) async {
     const firstNavigatorKey = _CollidingNavigatorKey('first');
     const secondNavigatorKey = _CollidingNavigatorKey('second');
+    expect(firstNavigatorKey, isNot(equals(secondNavigatorKey)));
+    expect(firstNavigatorKey.hashCode, secondNavigatorKey.hashCode);
+    final firstPageKey = GlobalKey<DummyStatefulWidgetState>();
+    final secondPageKey = UniqueKey();
+    final firstRoute = _CollidingShellRoute(
+      navigatorKey: firstNavigatorKey,
+      builder: (_, _, Widget child) => child,
+      routes: <RouteBase>[
+        GoRoute(
+          path: '/first',
+          builder: (_, _) => DummyStatefulWidget(key: firstPageKey),
+        ),
+      ],
+    );
+    final secondRoute = _CollidingShellRoute(
+      navigatorKey: secondNavigatorKey,
+      builder: (_, _, Widget child) => child,
+      routes: <RouteBase>[
+        GoRoute(
+          path: '/second',
+          builder: (_, _) => DummyScreen(key: secondPageKey),
+        ),
+      ],
+    );
+    expect(firstRoute, isNot(equals(secondRoute)));
+    expect(firstRoute.hashCode, secondRoute.hashCode);
     final routes = <RouteBase>[
       ShellRoute(
-        builder: (_, __, Widget child) => _ShellScaffold(label: 'project-shell', child: child),
-        routes: <RouteBase>[
-          ShellRoute(
-            navigatorKey: firstNavigatorKey,
-            builder: (_, __, Widget child) => _ShellScaffold(label: 'first-shell', child: child),
-            routes: <RouteBase>[
-              GoRoute(
-                path: '/first',
-                builder: (_, __) => const _CounterPage(label: 'first count'),
-              ),
-            ],
-          ),
-          ShellRoute(
-            navigatorKey: secondNavigatorKey,
-            builder: (_, __, Widget child) => _ShellScaffold(label: 'second-shell', child: child),
-            routes: <RouteBase>[
-              GoRoute(path: '/second', builder: (_, __) => const Text('second page')),
-            ],
-          ),
-        ],
+        builder: (_, _, Widget child) => child,
+        routes: <RouteBase>[firstRoute, secondRoute],
       ),
     ];
     final GoRouter router = await createRouter(routes, tester, initialLocation: '/first');
 
-    expect(find.text('project-shell'), findsOneWidget);
-    expect(find.text('first-shell'), findsOneWidget);
-    expect(find.text('first count: 0'), findsOneWidget);
+    final NavigatorState firstNavigator = firstNavigatorKey.currentState!;
+    final DummyStatefulWidgetState firstPage = firstPageKey.currentState!;
+    expect(secondNavigatorKey.currentState, isNull);
 
-    await tester.tap(find.text('first count: 0'));
+    firstPage.increment();
     await tester.pump();
-    expect(find.text('first count: 1'), findsOneWidget);
+    expect(firstPage.counter, 1);
 
     router.push('/second');
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('project-shell'), findsOneWidget);
-    expect(find.text('first-shell'), findsNothing);
-    expect(find.text('second-shell'), findsOneWidget);
-    expect(find.text('second page'), findsOneWidget);
+    final NavigatorState secondNavigator = secondNavigatorKey.currentState!;
+    expect(firstNavigatorKey.currentState, same(firstNavigator));
+    expect(secondNavigator, isNot(same(firstNavigator)));
+    expect(firstNavigator.mounted, isTrue);
+    expect(secondNavigator.mounted, isTrue);
+    expect(firstPageKey.currentState, same(firstPage));
+    expect(firstPage.counter, 1);
+    expect(find.byKey(secondPageKey), findsOneWidget);
 
     router.pop();
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('project-shell'), findsOneWidget);
-    expect(find.text('second-shell'), findsNothing);
-    expect(find.text('first-shell'), findsOneWidget);
-    expect(find.text('first count: 1'), findsOneWidget);
+    expect(firstNavigatorKey.currentState, same(firstNavigator));
+    expect(firstNavigator.mounted, isTrue);
+    expect(secondNavigatorKey.currentState, isNull);
+    expect(secondNavigator.mounted, isFalse);
+    expect(firstPageKey.currentState, same(firstPage));
+    expect(firstPage.counter, 1);
+    expect(find.byKey(secondPageKey), findsNothing);
+
+    router.refresh();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(firstNavigatorKey.currentState, same(firstNavigator));
+    expect(firstPageKey.currentState, same(firstPage));
+    expect(firstPage.counter, 1);
+
+    router.go('/second');
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(secondNavigatorKey.currentState, isNotNull);
+    expect(find.byKey(secondPageKey), findsOneWidget);
   });
 
   testWidgets('push inside or outside shell route', (WidgetTester tester) async {
@@ -344,50 +372,18 @@ void main() {
   });
 }
 
-class _ShellScaffold extends StatelessWidget {
-  const _ShellScaffold({required this.label, required this.child});
-
-  final String label;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      child: Column(
-        children: <Widget>[
-          Text(label),
-          Expanded(child: child),
-        ],
-      ),
-    );
-  }
-}
-
-class _CounterPage extends StatefulWidget {
-  const _CounterPage({required this.label});
-
-  final String label;
+class _CollidingShellRoute extends ShellRoute {
+  _CollidingShellRoute({
+    required super.navigatorKey,
+    required super.builder,
+    required super.routes,
+  });
 
   @override
-  State<_CounterPage> createState() => _CounterPageState();
-}
-
-class _CounterPageState extends State<_CounterPage> {
-  int _count = 0;
+  bool operator ==(Object other) => identical(this, other);
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: TextButton(
-        onPressed: () {
-          setState(() {
-            _count++;
-          });
-        },
-        child: Text('${widget.label}: $_count'),
-      ),
-    );
-  }
+  int get hashCode => 0;
 }
 
 class _CollidingNavigatorKey extends GlobalKey<NavigatorState> {

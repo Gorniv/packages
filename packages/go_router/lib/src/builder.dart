@@ -106,7 +106,7 @@ class RouteBuilder {
       context,
       _CustomNavigator(
         // The state needs to persist across rebuild.
-        key: GlobalObjectKey(configuration.navigatorKey),
+        key: GlobalObjectKey(configuration.navigatorKey.hashCode),
         navigatorKey: configuration.navigatorKey,
         observers: observers,
         navigatorRestorationId: restorationScopeId,

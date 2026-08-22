@@ -4878,7 +4878,7 @@ void main() {
                     return Scaffold(
                       body: TextButton(
                         onPressed: () async {
-                          Navigator.of(context).push(
+                          shellNavigatorKey.currentState!.push(
                             MaterialPageRoute<void>(
                               builder: (BuildContext context) {
                                 return const Scaffold(body: Text('pageless route'));
