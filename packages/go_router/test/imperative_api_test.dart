@@ -179,17 +179,11 @@ void main() {
     const secondNavigatorKey = _CollidingNavigatorKey('second');
     expect(firstNavigatorKey, isNot(equals(secondNavigatorKey)));
     expect(firstNavigatorKey.hashCode, secondNavigatorKey.hashCode);
-    final firstPageKey = GlobalKey<DummyStatefulWidgetState>();
     final secondPageKey = UniqueKey();
     final firstRoute = _CollidingShellRoute(
       navigatorKey: firstNavigatorKey,
       builder: (_, _, Widget child) => child,
-      routes: <RouteBase>[
-        GoRoute(
-          path: '/first',
-          builder: (_, _) => DummyStatefulWidget(key: firstPageKey),
-        ),
-      ],
+      routes: <RouteBase>[GoRoute(path: '/first', builder: (_, _) => const DummyStatefulWidget())],
     );
     final secondRoute = _CollidingShellRoute(
       navigatorKey: secondNavigatorKey,
@@ -212,7 +206,9 @@ void main() {
     final GoRouter router = await createRouter(routes, tester, initialLocation: '/first');
 
     final NavigatorState firstNavigator = firstNavigatorKey.currentState!;
-    final DummyStatefulWidgetState firstPage = firstPageKey.currentState!;
+    final DummyStatefulWidgetState firstPage = tester.state<DummyStatefulWidgetState>(
+      find.byType(DummyStatefulWidget),
+    );
     expect(secondNavigatorKey.currentState, isNull);
 
     firstPage.increment();
@@ -227,8 +223,42 @@ void main() {
     expect(secondNavigator, isNot(same(firstNavigator)));
     expect(firstNavigator.mounted, isTrue);
     expect(secondNavigator.mounted, isTrue);
-    expect(firstPageKey.currentState, same(firstPage));
+    expect(firstPage.mounted, isTrue);
     expect(firstPage.counter, 1);
+    expect(find.byKey(secondPageKey), findsOneWidget);
+
+    router.push('/first');
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(firstNavigatorKey.currentState, same(firstNavigator));
+    expect(secondNavigatorKey.currentState, same(secondNavigator));
+    expect(firstNavigator.mounted, isTrue);
+    expect(secondNavigator.mounted, isTrue);
+    expect(firstPage.mounted, isTrue);
+    expect(firstPage.counter, 1);
+    expect(find.byType(DummyStatefulWidget), findsOneWidget);
+
+    final DummyStatefulWidgetState pushedFirstPage = tester.state<DummyStatefulWidgetState>(
+      find.byType(DummyStatefulWidget),
+    );
+    expect(pushedFirstPage, isNot(same(firstPage)));
+    pushedFirstPage.increment();
+    await tester.pump();
+    expect(pushedFirstPage.counter, 1);
+
+    router.refresh();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(firstNavigatorKey.currentState, same(firstNavigator));
+    expect(secondNavigatorKey.currentState, same(secondNavigator));
+    expect(pushedFirstPage.mounted, isTrue);
+    expect(pushedFirstPage.counter, 1);
+
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(secondNavigatorKey.currentState, same(secondNavigator));
+    expect(secondNavigator.mounted, isTrue);
     expect(find.byKey(secondPageKey), findsOneWidget);
 
     router.pop();
@@ -238,7 +268,7 @@ void main() {
     expect(firstNavigator.mounted, isTrue);
     expect(secondNavigatorKey.currentState, isNull);
     expect(secondNavigator.mounted, isFalse);
-    expect(firstPageKey.currentState, same(firstPage));
+    expect(firstPage.mounted, isTrue);
     expect(firstPage.counter, 1);
     expect(find.byKey(secondPageKey), findsNothing);
 
@@ -246,7 +276,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(firstNavigatorKey.currentState, same(firstNavigator));
-    expect(firstPageKey.currentState, same(firstPage));
+    expect(firstPage.mounted, isTrue);
     expect(firstPage.counter, 1);
 
     router.go('/second');
