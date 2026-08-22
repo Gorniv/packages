@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'test_helpers.dart';
 
@@ -15,7 +15,7 @@ void main() {
     final b = UniqueKey();
     final routes = <RouteBase>[
       ShellRoute(
-        builder: (_, __, Widget child) {
+        builder: (_, _, Widget child) {
           return Scaffold(
             appBar: AppBar(title: const Text('shell')),
             body: child,
@@ -24,20 +24,16 @@ void main() {
         routes: <RouteBase>[
           GoRoute(
             path: '/a',
-            builder: (_, __) => DummyScreen(key: a),
+            builder: (_, _) => DummyScreen(key: a),
           ),
           GoRoute(
             path: '/b',
-            builder: (_, __) => DummyScreen(key: b),
+            builder: (_, _) => DummyScreen(key: b),
           ),
         ],
       ),
     ];
-    final GoRouter router = await createRouter(
-      routes,
-      tester,
-      initialLocation: '/a',
-    );
+    final GoRouter router = await createRouter(routes, tester, initialLocation: '/a');
 
     expect(find.text('shell'), findsOneWidget);
     expect(find.byKey(a), findsOneWidget);
@@ -56,10 +52,10 @@ void main() {
     final routes = <RouteBase>[
       GoRoute(
         path: '/a',
-        builder: (_, __) => DummyScreen(key: a),
+        builder: (_, _) => DummyScreen(key: a),
       ),
       ShellRoute(
-        builder: (_, __, Widget child) {
+        builder: (_, _, Widget child) {
           return Scaffold(
             appBar: AppBar(title: const Text('shell')),
             body: child,
@@ -68,16 +64,12 @@ void main() {
         routes: <RouteBase>[
           GoRoute(
             path: '/b',
-            builder: (_, __) => DummyScreen(key: b),
+            builder: (_, _) => DummyScreen(key: b),
           ),
         ],
       ),
     ];
-    final GoRouter router = await createRouter(
-      routes,
-      tester,
-      initialLocation: '/a',
-    );
+    final GoRouter router = await createRouter(routes, tester, initialLocation: '/a');
 
     expect(find.text('shell'), findsNothing);
     expect(find.byKey(a), findsOneWidget);
@@ -89,9 +81,7 @@ void main() {
     expect(find.byKey(b), findsOneWidget);
   });
 
-  testWidgets('shell route reflect imperative push', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('shell route reflect imperative push', (WidgetTester tester) async {
     // Regression test for https://github.com/flutter/flutter/issues/125752.
     final home = UniqueKey();
     final a = UniqueKey();
@@ -106,22 +96,18 @@ void main() {
         routes: <RouteBase>[
           GoRoute(
             path: '/',
-            builder: (_, __) => DummyScreen(key: home),
+            builder: (_, _) => DummyScreen(key: home),
             routes: <RouteBase>[
               GoRoute(
                 path: 'a',
-                builder: (_, __) => DummyScreen(key: a),
+                builder: (_, _) => DummyScreen(key: a),
               ),
             ],
           ),
         ],
       ),
     ];
-    final GoRouter router = await createRouter(
-      routes,
-      tester,
-      initialLocation: '/a',
-    );
+    final GoRouter router = await createRouter(routes, tester, initialLocation: '/a');
 
     expect(find.text('location: /a'), findsOneWidget);
     expect(find.byKey(a), findsOneWidget);
@@ -139,15 +125,13 @@ void main() {
     expect(find.byKey(home), findsNothing);
   });
 
-  testWidgets('push shell route in another shell route', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('push shell route in another shell route', (WidgetTester tester) async {
     // Regression test for https://github.com/flutter/flutter/issues/120791.
     final b = UniqueKey();
     final a = UniqueKey();
     final routes = <RouteBase>[
       ShellRoute(
-        builder: (_, __, Widget child) {
+        builder: (_, _, Widget child) {
           return Scaffold(
             appBar: AppBar(title: const Text('shell1')),
             body: child,
@@ -156,12 +140,12 @@ void main() {
         routes: <RouteBase>[
           GoRoute(
             path: '/a',
-            builder: (_, __) => DummyScreen(key: a),
+            builder: (_, _) => DummyScreen(key: a),
           ),
         ],
       ),
       ShellRoute(
-        builder: (_, __, Widget child) {
+        builder: (_, _, Widget child) {
           return Scaffold(
             appBar: AppBar(title: const Text('shell2')),
             body: child,
@@ -170,16 +154,12 @@ void main() {
         routes: <RouteBase>[
           GoRoute(
             path: '/b',
-            builder: (_, __) => DummyScreen(key: b),
+            builder: (_, _) => DummyScreen(key: b),
           ),
         ],
       ),
     ];
-    final GoRouter router = await createRouter(
-      routes,
-      tester,
-      initialLocation: '/a',
-    );
+    final GoRouter router = await createRouter(routes, tester, initialLocation: '/a');
 
     expect(find.text('shell1'), findsOneWidget);
     expect(find.byKey(a), findsOneWidget);
@@ -192,82 +172,69 @@ void main() {
     expect(find.byKey(b), findsOneWidget);
   });
 
-  testWidgets(
-    'push to a sibling shell route under the same parent shell route',
-    (WidgetTester tester) async {
-      const firstNavigatorKey = _CollidingNavigatorKey('first');
-      const secondNavigatorKey = _CollidingNavigatorKey('second');
-      final routes = <RouteBase>[
-        ShellRoute(
-          builder: (_, __, Widget child) =>
-              _ShellScaffold(label: 'project-shell', child: child),
-          routes: <RouteBase>[
-            ShellRoute(
-              navigatorKey: firstNavigatorKey,
-              builder: (_, __, Widget child) =>
-                  _ShellScaffold(label: 'first-shell', child: child),
-              routes: <RouteBase>[
-                GoRoute(
-                  path: '/first',
-                  builder: (_, __) => const _CounterPage(label: 'first count'),
-                ),
-              ],
-            ),
-            ShellRoute(
-              navigatorKey: secondNavigatorKey,
-              builder: (_, __, Widget child) =>
-                  _ShellScaffold(label: 'second-shell', child: child),
-              routes: <RouteBase>[
-                GoRoute(
-                  path: '/second',
-                  builder: (_, __) => const Text('second page'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ];
-      final GoRouter router = await createRouter(
-        routes,
-        tester,
-        initialLocation: '/first',
-      );
-
-      expect(find.text('project-shell'), findsOneWidget);
-      expect(find.text('first-shell'), findsOneWidget);
-      expect(find.text('first count: 0'), findsOneWidget);
-
-      await tester.tap(find.text('first count: 0'));
-      await tester.pump();
-      expect(find.text('first count: 1'), findsOneWidget);
-
-      router.push('/second');
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      expect(find.text('project-shell'), findsOneWidget);
-      expect(find.text('first-shell'), findsNothing);
-      expect(find.text('second-shell'), findsOneWidget);
-      expect(find.text('second page'), findsOneWidget);
-
-      router.pop();
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      expect(find.text('project-shell'), findsOneWidget);
-      expect(find.text('second-shell'), findsNothing);
-      expect(find.text('first-shell'), findsOneWidget);
-      expect(find.text('first count: 1'), findsOneWidget);
-    },
-  );
-
-  testWidgets('push inside or outside shell route', (
+  testWidgets('push to a sibling shell route under the same parent shell route', (
     WidgetTester tester,
   ) async {
+    const firstNavigatorKey = _CollidingNavigatorKey('first');
+    const secondNavigatorKey = _CollidingNavigatorKey('second');
+    final routes = <RouteBase>[
+      ShellRoute(
+        builder: (_, __, Widget child) => _ShellScaffold(label: 'project-shell', child: child),
+        routes: <RouteBase>[
+          ShellRoute(
+            navigatorKey: firstNavigatorKey,
+            builder: (_, __, Widget child) => _ShellScaffold(label: 'first-shell', child: child),
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/first',
+                builder: (_, __) => const _CounterPage(label: 'first count'),
+              ),
+            ],
+          ),
+          ShellRoute(
+            navigatorKey: secondNavigatorKey,
+            builder: (_, __, Widget child) => _ShellScaffold(label: 'second-shell', child: child),
+            routes: <RouteBase>[
+              GoRoute(path: '/second', builder: (_, __) => const Text('second page')),
+            ],
+          ),
+        ],
+      ),
+    ];
+    final GoRouter router = await createRouter(routes, tester, initialLocation: '/first');
+
+    expect(find.text('project-shell'), findsOneWidget);
+    expect(find.text('first-shell'), findsOneWidget);
+    expect(find.text('first count: 0'), findsOneWidget);
+
+    await tester.tap(find.text('first count: 0'));
+    await tester.pump();
+    expect(find.text('first count: 1'), findsOneWidget);
+
+    router.push('/second');
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('project-shell'), findsOneWidget);
+    expect(find.text('first-shell'), findsNothing);
+    expect(find.text('second-shell'), findsOneWidget);
+    expect(find.text('second page'), findsOneWidget);
+
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('project-shell'), findsOneWidget);
+    expect(find.text('second-shell'), findsNothing);
+    expect(find.text('first-shell'), findsOneWidget);
+    expect(find.text('first count: 1'), findsOneWidget);
+  });
+
+  testWidgets('push inside or outside shell route', (WidgetTester tester) async {
     // Regression test for https://github.com/flutter/flutter/issues/120665.
     final inside = UniqueKey();
     final outside = UniqueKey();
     final routes = <RouteBase>[
       ShellRoute(
-        builder: (_, __, Widget child) {
+        builder: (_, _, Widget child) {
           return Scaffold(
             appBar: AppBar(title: const Text('shell')),
             body: child,
@@ -276,20 +243,16 @@ void main() {
         routes: <RouteBase>[
           GoRoute(
             path: '/in',
-            builder: (_, __) => DummyScreen(key: inside),
+            builder: (_, _) => DummyScreen(key: inside),
           ),
         ],
       ),
       GoRoute(
         path: '/out',
-        builder: (_, __) => DummyScreen(key: outside),
+        builder: (_, _) => DummyScreen(key: outside),
       ),
     ];
-    final GoRouter router = await createRouter(
-      routes,
-      tester,
-      initialLocation: '/out',
-    );
+    final GoRouter router = await createRouter(routes, tester, initialLocation: '/out');
 
     expect(find.text('shell'), findsNothing);
     expect(find.byKey(outside), findsOneWidget);
@@ -316,7 +279,7 @@ void main() {
     final e = UniqueKey();
     final routes = <RouteBase>[
       ShellRoute(
-        builder: (_, __, Widget child) {
+        builder: (_, _, Widget child) {
           return Scaffold(
             appBar: AppBar(title: const Text('shell')),
             body: child,
@@ -325,34 +288,30 @@ void main() {
         routes: <RouteBase>[
           GoRoute(
             path: '/a',
-            builder: (_, __) => DummyScreen(key: a),
+            builder: (_, _) => DummyScreen(key: a),
           ),
           GoRoute(
             path: '/c',
-            builder: (_, __) => DummyScreen(key: c),
+            builder: (_, _) => DummyScreen(key: c),
           ),
         ],
       ),
       GoRoute(
         path: '/d',
-        builder: (_, __) => DummyScreen(key: d),
+        builder: (_, _) => DummyScreen(key: d),
         routes: <RouteBase>[
           GoRoute(
             path: 'e',
-            builder: (_, __) => DummyScreen(key: e),
+            builder: (_, _) => DummyScreen(key: e),
           ),
         ],
       ),
       GoRoute(
         path: '/b',
-        builder: (_, __) => DummyScreen(key: b),
+        builder: (_, _) => DummyScreen(key: b),
       ),
     ];
-    final GoRouter router = await createRouter(
-      routes,
-      tester,
-      initialLocation: '/a',
-    );
+    final GoRouter router = await createRouter(routes, tester, initialLocation: '/a');
 
     expect(find.text('shell'), findsOneWidget);
     expect(find.byKey(a), findsOneWidget);
@@ -440,6 +399,5 @@ class _CollidingNavigatorKey extends GlobalKey<NavigatorState> {
   int get hashCode => 0;
 
   @override
-  bool operator ==(Object other) =>
-      other is _CollidingNavigatorKey && other._label == _label;
+  bool operator ==(Object other) => other is _CollidingNavigatorKey && other._label == _label;
 }

@@ -13,7 +13,6 @@ import 'package:flutter_plugin_tools/src/common/plugin_utils.dart';
 import 'package:flutter_plugin_tools/src/drive_examples_command.dart';
 import 'package:git/git.dart';
 import 'package:mockito/mockito.dart';
-import 'package:platform/platform.dart';
 import 'package:test/test.dart';
 
 import 'mocks.dart';
@@ -21,10 +20,25 @@ import 'util.dart';
 
 const String _fakeIOSDevice = '67d5c3d1-8bdf-46ad-8f6b-b00e2a972dda';
 const String _fakeAndroidDevice = 'emulator-1234';
+const List<String> _defaultWebBrowserFlags = <String>[
+  '--web-browser-flag=--no-sandbox',
+  '--web-browser-flag=--disable-background-timer-throttling',
+  '--web-browser-flag=--disable-renderer-backgrounding',
+  '--web-browser-flag=--disable-background-networking',
+  '--web-browser-flag=--disable-search-engine-choice-screen',
+  '--web-browser-flag=--disable-extensions',
+  '--web-browser-flag=--disable-popup-blocking',
+  '--web-browser-flag=--disable-translate',
+  '--web-browser-flag=--disable-default-apps',
+  '--web-browser-flag=--no-default-browser-check',
+  '--web-browser-flag=--no-first-run',
+  '--web-browser-flag=--password-store=basic',
+  '--web-browser-flag=--bwsi',
+];
 
 void main() {
   group('test drive_example_command', () {
-    late Platform mockPlatform;
+    late MockPlatform mockPlatform;
     late Directory packagesDir;
     late CommandRunner<void> runner;
     late RecordingProcessRunner processRunner;
@@ -33,8 +47,9 @@ void main() {
     setUp(() {
       mockPlatform = MockPlatform();
       final GitDir gitDir;
-      (:packagesDir, :processRunner, :gitProcessRunner, :gitDir) =
-          configureBaseCommandMocks(platform: mockPlatform);
+      (:packagesDir, :processRunner, :gitProcessRunner, :gitDir) = configureBaseCommandMocks(
+        platform: mockPlatform,
+      );
       final command = DriveExamplesCommand(
         packagesDir,
         processRunner: processRunner,
@@ -42,14 +57,9 @@ void main() {
         gitDir: gitDir,
       );
 
-      runner = CommandRunner<void>(
-        'drive_examples_command',
-        'Test for drive_example_command',
-      );
+      runner = CommandRunner<void>('drive_examples_command', 'Test for drive_example_command');
       runner.addCommand(command);
 
-      // TODO(dit): Clean this up, https://github.com/flutter/flutter/issues/151869
-      mockPlatform.environment['CHANNEL'] = 'master';
       mockPlatform.environment['FLUTTER_LOGS_DIR'] = '/path/to/logs';
     });
 
@@ -67,19 +77,12 @@ void main() {
 ''';
       final devices = <String>[
         if (hasIOSDevice) '{"id": "$_fakeIOSDevice", "targetPlatform": "ios"}',
-        if (hasAndroidDevice)
-          '{"id": "$_fakeAndroidDevice", "targetPlatform": "android-x64"}',
+        if (hasAndroidDevice) '{"id": "$_fakeAndroidDevice", "targetPlatform": "android-x64"}',
       ];
-      final output =
-          '''${includeBanner ? updateBanner : ''}[${devices.join(',')}]''';
+      final output = '''${includeBanner ? updateBanner : ''}[${devices.join(',')}]''';
 
-      final mockDevicesProcess = MockProcess(
-        stdout: output,
-        stdoutEncoding: utf8,
-      );
-      processRunner.mockProcessesForExecutable[getFlutterCommand(
-        mockPlatform,
-      )] = <FakeProcessInfo>[
+      final mockDevicesProcess = MockProcess(stdout: output, stdoutEncoding: utf8);
+      processRunner.mockProcessesForExecutable[getFlutterCommand(mockPlatform)] = <FakeProcessInfo>[
         FakeProcessInfo(mockDevicesProcess, <String>['devices']),
       ];
     }
@@ -113,9 +116,7 @@ void main() {
       expect(commandError, isA<ToolExit>());
       expect(
         output,
-        containsAllInOrder(<Matcher>[
-          contains('--wasm is only supported on the web platform'),
-        ]),
+        containsAllInOrder(<Matcher>[contains('--wasm is only supported on the web platform')]),
       );
     });
 
@@ -172,18 +173,13 @@ void main() {
 
       expect(
         output,
-        containsAllInOrder(<Matcher>[
-          contains('Running for plugin'),
-          contains('No issues found!'),
-        ]),
+        containsAllInOrder(<Matcher>[contains('Running for plugin'), contains('No issues found!')]),
       );
     });
 
     test('fails for iOS if getting devices fails', () async {
       // Simulate failure from `flutter devices`.
-      processRunner.mockProcessesForExecutable[getFlutterCommand(
-        mockPlatform,
-      )] = <FakeProcessInfo>[
+      processRunner.mockProcessesForExecutable[getFlutterCommand(mockPlatform)] = <FakeProcessInfo>[
         FakeProcessInfo(MockProcess(exitCode: 1), <String>['devices']),
       ];
 
@@ -212,50 +208,44 @@ void main() {
       );
 
       expect(commandError, isA<ToolExit>());
-      expect(
-        output,
-        containsAllInOrder(<Matcher>[contains('No Android devices')]),
-      );
+      expect(output, containsAllInOrder(<Matcher>[contains('No Android devices')]));
     });
 
-    test(
-      'a plugin without any integration test files is reported as an error',
-      () async {
-        setMockFlutterDevicesOutput();
-        createFakePlugin(
-          'plugin',
-          packagesDir,
-          extraFiles: <String>[
-            'example/lib/main.dart',
-            'example/android/android.java',
-            'example/ios/ios.m',
-          ],
-          platformSupport: <String, PlatformDetails>{
-            platformAndroid: const PlatformDetails(PlatformSupport.inline),
-            platformIOS: const PlatformDetails(PlatformSupport.inline),
-          },
-        );
+    test('a plugin without any integration test files is reported as an error', () async {
+      setMockFlutterDevicesOutput();
+      createFakePlugin(
+        'plugin',
+        packagesDir,
+        extraFiles: <String>[
+          'example/lib/main.dart',
+          'example/android/android.java',
+          'example/ios/ios.m',
+        ],
+        platformSupport: <String, PlatformDetails>{
+          platformAndroid: const PlatformDetails(PlatformSupport.inline),
+          platformIOS: const PlatformDetails(PlatformSupport.inline),
+        },
+      );
 
-        Error? commandError;
-        final List<String> output = await runCapturingPrint(
-          runner,
-          <String>['drive-examples', '--android'],
-          errorHandler: (Error e) {
-            commandError = e;
-          },
-        );
+      Error? commandError;
+      final List<String> output = await runCapturingPrint(
+        runner,
+        <String>['drive-examples', '--android'],
+        errorHandler: (Error e) {
+          commandError = e;
+        },
+      );
 
-        expect(commandError, isA<ToolExit>());
-        expect(
-          output,
-          containsAllInOrder(<Matcher>[
-            contains('Running for plugin'),
-            contains('No driver tests were run (1 example(s) found).'),
-            contains('No tests ran'),
-          ]),
-        );
-      },
-    );
+      expect(commandError, isA<ToolExit>());
+      expect(
+        output,
+        containsAllInOrder(<Matcher>[
+          contains('Running for plugin'),
+          contains('No driver tests were run (1 example(s) found).'),
+          contains('No tests ran'),
+        ]),
+      );
+    });
 
     test('integration tests using test(...) fail validation', () async {
       setMockFlutterDevicesOutput();
@@ -292,12 +282,7 @@ void main() {
       );
 
       expect(commandError, isA<ToolExit>());
-      expect(
-        output,
-        containsAllInOrder(<Matcher>[
-          contains('foo_test.dart failed validation'),
-        ]),
-      );
+      expect(output, containsAllInOrder(<Matcher>[contains('foo_test.dart failed validation')]));
     });
 
     test('tests an iOS plugin', () async {
@@ -327,10 +312,7 @@ void main() {
 
       expect(
         output,
-        containsAllInOrder(<Matcher>[
-          contains('Running for plugin'),
-          contains('No issues found!'),
-        ]),
+        containsAllInOrder(<Matcher>[contains('Running for plugin'), contains('No issues found!')]),
       );
 
       expect(
@@ -380,10 +362,7 @@ void main() {
 
       expect(
         output,
-        containsAllInOrder(<Matcher>[
-          contains('Running for plugin'),
-          contains('No issues found!'),
-        ]),
+        containsAllInOrder(<Matcher>[contains('Running for plugin'), contains('No issues found!')]),
       );
 
       expect(
@@ -408,10 +387,7 @@ void main() {
       final RepositoryPackage plugin = createFakePlugin(
         'plugin',
         packagesDir,
-        extraFiles: <String>[
-          'example/integration_test/bar_test.dart',
-          'example/ios/ios.m',
-        ],
+        extraFiles: <String>['example/integration_test/bar_test.dart', 'example/ios/ios.m'],
         platformSupport: <String, PlatformDetails>{
           platformAndroid: const PlatformDetails(PlatformSupport.inline),
           platformIOS: const PlatformDetails(PlatformSupport.inline),
@@ -419,28 +395,20 @@ void main() {
       );
 
       final fakeAsync = FakeAsync();
-      processRunner.mockProcessesForExecutable['flutter']!.addAll(
-        <FakeProcessInfo>[
-          FakeProcessInfo(
-            _FakeDelayingProcess(
-              delayDuration: const Duration(minutes: 11),
-              fakeAsync: fakeAsync,
-            ),
-            <String>['test'],
-          ),
-          FakeProcessInfo(MockProcess(), <String>['screenshot']),
-        ],
-      );
+      processRunner.mockProcessesForExecutable['flutter']!.addAll(<FakeProcessInfo>[
+        FakeProcessInfo(
+          _FakeDelayingProcess(delayDuration: const Duration(minutes: 11), fakeAsync: fakeAsync),
+          <String>['test'],
+        ),
+        FakeProcessInfo(MockProcess(), <String>['screenshot']),
+      ]);
 
       final Directory pluginExampleDirectory = getExampleDir(plugin);
 
       var output = <String>[];
       fakeAsync.run((_) {
         () async {
-          output = await runCapturingPrint(runner, <String>[
-            'drive-examples',
-            '--ios',
-          ]);
+          output = await runCapturingPrint(runner, <String>['drive-examples', '--ios']);
         }();
       });
       fakeAsync.flushTimers();
@@ -510,10 +478,7 @@ void main() {
       final RepositoryPackage plugin = createFakePlugin(
         'plugin',
         packagesDir,
-        extraFiles: <String>[
-          'example/integration_test/plugin_test.dart',
-          'example/linux/linux.cc',
-        ],
+        extraFiles: <String>['example/integration_test/plugin_test.dart', 'example/linux/linux.cc'],
         platformSupport: <String, PlatformDetails>{
           platformLinux: const PlatformDetails(PlatformSupport.inline),
         },
@@ -528,10 +493,7 @@ void main() {
 
       expect(
         output,
-        containsAllInOrder(<Matcher>[
-          contains('Running for plugin'),
-          contains('No issues found!'),
-        ]),
+        containsAllInOrder(<Matcher>[contains('Running for plugin'), contains('No issues found!')]),
       );
 
       expect(
@@ -596,10 +558,7 @@ void main() {
 
       expect(
         output,
-        containsAllInOrder(<Matcher>[
-          contains('Running for plugin'),
-          contains('No issues found!'),
-        ]),
+        containsAllInOrder(<Matcher>[contains('Running for plugin'), contains('No issues found!')]),
       );
 
       expect(
@@ -788,10 +747,7 @@ void main() {
 
       expect(
         output,
-        containsAllInOrder(<Matcher>[
-          contains('Running for plugin'),
-          contains('No issues found!'),
-        ]),
+        containsAllInOrder(<Matcher>[contains('Running for plugin'), contains('No issues found!')]),
       );
 
       // Output should be empty since running drive-examples --web on a non-web
@@ -822,10 +778,7 @@ void main() {
 
       expect(
         output,
-        containsAllInOrder(<Matcher>[
-          contains('Running for plugin'),
-          contains('No issues found!'),
-        ]),
+        containsAllInOrder(<Matcher>[contains('Running for plugin'), contains('No issues found!')]),
       );
 
       expect(
@@ -837,6 +790,7 @@ void main() {
             'web-server',
             '--web-port=7357',
             '--browser-name=chrome',
+            ..._defaultWebBrowserFlags,
             '--screenshot=/path/to/logs/plugin_example-drive',
             '--driver',
             'test_driver/integration_test.dart',
@@ -871,10 +825,7 @@ void main() {
 
       expect(
         output,
-        containsAllInOrder(<Matcher>[
-          contains('Running for plugin'),
-          contains('No issues found!'),
-        ]),
+        containsAllInOrder(<Matcher>[contains('Running for plugin'), contains('No issues found!')]),
       );
 
       expect(
@@ -887,6 +838,7 @@ void main() {
             '--web-port=7357',
             '--browser-name=chrome',
             '--wasm',
+            ..._defaultWebBrowserFlags,
             '--screenshot=/path/to/logs/plugin_example-drive',
             '--driver',
             'test_driver/integration_test.dart',
@@ -921,10 +873,7 @@ void main() {
 
       expect(
         output,
-        containsAllInOrder(<Matcher>[
-          contains('Running for plugin'),
-          contains('No issues found!'),
-        ]),
+        containsAllInOrder(<Matcher>[contains('Running for plugin'), contains('No issues found!')]),
       );
 
       expect(
@@ -937,6 +886,7 @@ void main() {
             'web-server',
             '--web-port=7357',
             '--browser-name=chrome',
+            ..._defaultWebBrowserFlags,
             '--screenshot=/path/to/logs/plugin_example-drive',
             '--driver',
             'test_driver/integration_test.dart',
@@ -972,10 +922,7 @@ void main() {
 
       expect(
         output,
-        containsAllInOrder(<Matcher>[
-          contains('Running for plugin'),
-          contains('No issues found!'),
-        ]),
+        containsAllInOrder(<Matcher>[contains('Running for plugin'), contains('No issues found!')]),
       );
 
       expect(
@@ -988,6 +935,56 @@ void main() {
             '--web-port=7357',
             '--browser-name=chrome',
             '--chrome-binary=/path/to/chrome',
+            ..._defaultWebBrowserFlags,
+            '--screenshot=/path/to/logs/plugin_example-drive',
+            '--driver',
+            'test_driver/integration_test.dart',
+            '--target',
+            'integration_test/plugin_test.dart',
+          ], pluginExampleDirectory.path),
+        ]),
+      );
+    });
+
+    test('drives a web plugin on macOS with mock keychain', () async {
+      final RepositoryPackage plugin = createFakePlugin(
+        'plugin',
+        packagesDir,
+        extraFiles: <String>[
+          'example/integration_test/plugin_test.dart',
+          'example/test_driver/integration_test.dart',
+          'example/web/index.html',
+        ],
+        platformSupport: <String, PlatformDetails>{
+          platformWeb: const PlatformDetails(PlatformSupport.inline),
+        },
+      );
+
+      final Directory pluginExampleDirectory = getExampleDir(plugin);
+
+      mockPlatform.isMacOS = true;
+
+      final List<String> output = await runCapturingPrint(runner, <String>[
+        'drive-examples',
+        '--web',
+      ]);
+
+      expect(
+        output,
+        containsAllInOrder(<Matcher>[contains('Running for plugin'), contains('No issues found!')]),
+      );
+
+      expect(
+        processRunner.recordedCalls,
+        orderedEquals(<ProcessCall>[
+          ProcessCall(getFlutterCommand(mockPlatform), const <String>[
+            'drive',
+            '-d',
+            'web-server',
+            '--web-port=7357',
+            '--browser-name=chrome',
+            ..._defaultWebBrowserFlags,
+            '--web-browser-flag=--use-mock-keychain',
             '--screenshot=/path/to/logs/plugin_example-drive',
             '--driver',
             'test_driver/integration_test.dart',
@@ -1046,10 +1043,7 @@ void main() {
 
       expect(
         output,
-        containsAllInOrder(<Matcher>[
-          contains('Running for plugin'),
-          contains('No issues found!'),
-        ]),
+        containsAllInOrder(<Matcher>[contains('Running for plugin'), contains('No issues found!')]),
       );
 
       expect(
@@ -1089,10 +1083,7 @@ void main() {
 
       expect(
         output,
-        containsAllInOrder(<Matcher>[
-          contains('Running for plugin'),
-          contains('No issues found!'),
-        ]),
+        containsAllInOrder(<Matcher>[contains('Running for plugin'), contains('No issues found!')]),
       );
 
       expect(
@@ -1136,10 +1127,7 @@ void main() {
 
       expect(
         output,
-        containsAllInOrder(<Matcher>[
-          contains('Running for plugin'),
-          contains('No issues found!'),
-        ]),
+        containsAllInOrder(<Matcher>[contains('Running for plugin'), contains('No issues found!')]),
       );
 
       expect(
@@ -1187,10 +1175,7 @@ void main() {
 
       // Output should be empty other than the device query.
       expect(processRunner.recordedCalls, <ProcessCall>[
-        ProcessCall(getFlutterCommand(mockPlatform), const <String>[
-          'devices',
-          '--machine',
-        ], null),
+        ProcessCall(getFlutterCommand(mockPlatform), const <String>['devices', '--machine'], null),
       ]);
     });
 
@@ -1221,19 +1206,12 @@ void main() {
 
       // Output should be empty other than the device query.
       expect(processRunner.recordedCalls, <ProcessCall>[
-        ProcessCall(getFlutterCommand(mockPlatform), const <String>[
-          'devices',
-          '--machine',
-        ], null),
+        ProcessCall(getFlutterCommand(mockPlatform), const <String>['devices', '--machine'], null),
       ]);
     });
 
     test('platform interface plugins are silently skipped', () async {
-      createFakePlugin(
-        'aplugin_platform_interface',
-        packagesDir,
-        examples: <String>[],
-      );
+      createFakePlugin('aplugin_platform_interface', packagesDir, examples: <String>[]);
 
       setMockFlutterDevicesOutput();
       final List<String> output = await runCapturingPrint(runner, <String>[
@@ -1245,9 +1223,7 @@ void main() {
         output,
         containsAllInOrder(<Matcher>[
           contains('Running for aplugin_platform_interface'),
-          contains(
-            'SKIPPING: Platform interfaces are not expected to have integration tests.',
-          ),
+          contains('SKIPPING: Platform interfaces are not expected to have integration tests.'),
           contains('No issues found!'),
         ]),
       );
@@ -1376,10 +1352,7 @@ void main() {
       createFakePlugin(
         'plugin',
         packagesDir,
-        extraFiles: <String>[
-          'example/test_driver/integration_test.dart',
-          'example/web/index.html',
-        ],
+        extraFiles: <String>['example/test_driver/integration_test.dart', 'example/web/index.html'],
         platformSupport: <String, PlatformDetails>{
           platformWeb: const PlatformDetails(PlatformSupport.inline),
         },
@@ -1425,9 +1398,7 @@ void main() {
       );
 
       // Simulate failure from `flutter drive`.
-      processRunner.mockProcessesForExecutable[getFlutterCommand(
-        mockPlatform,
-      )] = <FakeProcessInfo>[
+      processRunner.mockProcessesForExecutable[getFlutterCommand(mockPlatform)] = <FakeProcessInfo>[
         // Fail both bar_test.dart and foo_test.dart.
         FakeProcessInfo(MockProcess(exitCode: 1), <String>['drive']),
         FakeProcessInfo(MockProcess(exitCode: 1), <String>['drive']),
@@ -1466,6 +1437,7 @@ void main() {
             'web-server',
             '--web-port=7357',
             '--browser-name=chrome',
+            ..._defaultWebBrowserFlags,
             '--screenshot=/path/to/logs/plugin_example-drive',
             '--driver',
             'test_driver/integration_test.dart',
@@ -1478,6 +1450,7 @@ void main() {
             'web-server',
             '--web-port=7357',
             '--browser-name=chrome',
+            ..._defaultWebBrowserFlags,
             '--screenshot=/path/to/logs/plugin_example-drive',
             '--driver',
             'test_driver/integration_test.dart',
@@ -1504,8 +1477,9 @@ void main() {
 
       setMockFlutterDevicesOutput();
       // Simulate failure from `flutter test`.
-      processRunner.mockProcessesForExecutable[getFlutterCommand(mockPlatform)]!
-          .add(FakeProcessInfo(MockProcess(exitCode: 1), <String>['test']));
+      processRunner.mockProcessesForExecutable[getFlutterCommand(mockPlatform)]!.add(
+        FakeProcessInfo(MockProcess(exitCode: 1), <String>['test']),
+      );
 
       Error? commandError;
       final List<String> output = await runCapturingPrint(
@@ -1583,6 +1557,7 @@ void main() {
               'web-server',
               '--web-port=7357',
               '--browser-name=chrome',
+              ..._defaultWebBrowserFlags,
               '--screenshot=/path/to/logs/a_package_example-drive',
               '--driver',
               'test_driver/integration_test.dart',
@@ -1629,6 +1604,7 @@ void main() {
               'web-server',
               '--web-port=7357',
               '--browser-name=chrome',
+              ..._defaultWebBrowserFlags,
               '--driver',
               'test_driver/integration_test.dart',
               '--target',
@@ -1712,6 +1688,7 @@ void main() {
               'web-server',
               '--web-port=7357',
               '--browser-name=chrome',
+              ..._defaultWebBrowserFlags,
               '--screenshot=/path/to/logs/a_package_example_with_web-drive',
               '--driver',
               'test_driver/integration_test.dart',
@@ -1739,9 +1716,7 @@ void main() {
           output,
           containsAllInOrder(<Matcher>[
             contains('Running for a_package'),
-            contains(
-              'SKIPPING: No example is configured for integration tests.',
-            ),
+            contains('SKIPPING: No example is configured for integration tests.'),
           ]),
         );
 
@@ -1765,17 +1740,16 @@ void main() {
         test('runs command for changes to $file', () async {
           createFakePackage('package_a', packagesDir);
 
-          gitProcessRunner.mockProcessesForExecutable['git-diff'] =
-              <FakeProcessInfo>[
-                FakeProcessInfo(
-                  MockProcess(
-                    stdout:
-                        '''
+          gitProcessRunner.mockProcessesForExecutable['git-diff'] = <FakeProcessInfo>[
+            FakeProcessInfo(
+              MockProcess(
+                stdout:
+                    '''
 packages/package_a/$file
 ''',
-                  ),
-                ),
-              ];
+              ),
+            ),
+          ];
 
           // The target platform is irrelevant here; because this repo's
           // packages are fully federated, there's no need to distinguish
@@ -1787,44 +1761,30 @@ packages/package_a/$file
             '--web',
           ]);
 
-          expect(
-            output,
-            containsAllInOrder(<Matcher>[contains('Running for package_a')]),
-          );
+          expect(output, containsAllInOrder(<Matcher>[contains('Running for package_a')]));
         });
       }
 
       test('skips commands if all files should be ignored', () async {
         createFakePackage('package_a', packagesDir);
 
-        gitProcessRunner.mockProcessesForExecutable['git-diff'] =
-            <FakeProcessInfo>[
-              FakeProcessInfo(
-                MockProcess(
-                  stdout: '''
+        gitProcessRunner.mockProcessesForExecutable['git-diff'] = <FakeProcessInfo>[
+          FakeProcessInfo(
+            MockProcess(
+              stdout: '''
 README.md
-CODEOWNERS
+SUGGESTED_REVIEWERS.md
 .gitignore
 packages/package_a/CHANGELOG.md
 ''',
-                ),
-              ),
-            ];
-
-        final List<String> output = await runCapturingPrint(runner, <String>[
-          'drive-examples',
-        ]);
-
-        expect(
-          output,
-          isNot(
-            containsAllInOrder(<Matcher>[contains('Running for package_a')]),
+            ),
           ),
-        );
-        expect(
-          output,
-          containsAllInOrder(<Matcher>[contains('SKIPPING ALL PACKAGES')]),
-        );
+        ];
+
+        final List<String> output = await runCapturingPrint(runner, <String>['drive-examples']);
+
+        expect(output, isNot(containsAllInOrder(<Matcher>[contains('Running for package_a')])));
+        expect(output, containsAllInOrder(<Matcher>[contains('SKIPPING ALL PACKAGES')]));
       });
     });
   });
@@ -1832,11 +1792,9 @@ packages/package_a/CHANGELOG.md
 
 class _FakeDelayingProcess extends Fake implements io.Process {
   /// Creates a mock process that takes [delayDuration] time to exit successfully.
-  _FakeDelayingProcess({
-    required Duration delayDuration,
-    required FakeAsync fakeAsync,
-  }) : _delayDuration = delayDuration,
-       _fakeAsync = fakeAsync;
+  _FakeDelayingProcess({required Duration delayDuration, required FakeAsync fakeAsync})
+    : _delayDuration = delayDuration,
+      _fakeAsync = fakeAsync;
 
   final Duration _delayDuration;
   final FakeAsync _fakeAsync;
